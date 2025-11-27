@@ -1,9 +1,15 @@
 {
-  "name": "corrum",
+  "name": "@elabx-org/corrum",
   "version": "0.1.0",
   "description": "Corrum CLI and library for orchestrating multi-agent AI code reviews",
-  "private": true,
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elabx-org/corrum.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "bin": {
     "corrum": "./dist/cli.js"
   },
