@@ -9,11 +9,25 @@ Corrum manages the workflow, decides when reviews are needed, assigns roles, tra
 - Node.js >= 20.0.0
 - npm >= 9.0.0
 
-## Local Installation (Non-Root)
+## Installation
 
-Corrum is designed for local-only installation. It will **not** be published to npm.
+### Option 1: GitHub Packages (Recommended)
 
-### Option 1: npm link (Recommended for Development)
+```bash
+# Add GitHub Packages registry to .npmrc
+echo "@elabx-org:registry=https://npm.pkg.github.com" >> ~/.npmrc
+
+# Authenticate (needs a GitHub token with read:packages scope)
+npm login --scope=@elabx-org --registry=https://npm.pkg.github.com
+
+# Install globally
+npm install -g @elabx-org/corrum
+
+# Or install in a project
+npm install @elabx-org/corrum
+```
+
+### Option 2: npm link (Local Development)
 
 ```bash
 # Clone and enter the directory
@@ -32,7 +46,7 @@ corrum --help
 npm run local:uninstall
 ```
 
-### Option 2: Direct Execution
+### Option 3: Direct Execution
 
 ```bash
 # Run directly without installing globally
@@ -43,7 +57,7 @@ npm run build
 node dist/cli.js --help
 ```
 
-### Option 3: Local Path Install
+### Option 4: Local Path Install
 
 From another project:
 
