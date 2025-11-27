@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(cat:*)",
+      "Bash(test:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm install:*)",
+      "Bash(tree:*)",
+      "Bash(wc:*)",
+      "Bash(node -e:*)",
+      "Bash(ls:*)",
+      "Bash(for f in src/commands/*.ts)",
+      "Bash(do [ -f \"$f\" ])",
+      "Bash(basename:*)",
+      "Bash(done)",
+      "Bash(xargs:*)",
+      "Bash(npm test:*)",
+      "Bash(node /config/workspace/gh/corrum/dist/cli.js:*)",
+      "Bash(npm link:*)",
+      "Bash(corrum --version:*)",
+      "Bash(corrum analyze:*)",
+      "Bash(corrum status:*)",
+      "Bash(corrum stats:*)",
+      "Bash(corrum guide:*)",
+      "Bash(corrum:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
