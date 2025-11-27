@@ -131,9 +131,8 @@ describe('proposalMachine', () => {
 
   describe('revision transitions', () => {
     it('should return to pending_review on REVISED when under max iterations', () => {
-      const machine = proposalMachine;
-      const actor = createActor(machine, {
-        snapshot: machine.resolveState({ value: 'revision', context: {
+      const actor = createActor(proposalMachine, {
+        snapshot: proposalMachine.resolveState({ value: 'revision', context: {
           proposalId: 'test',
           iterations: 0,
           maxIterations: 2,
@@ -154,9 +153,8 @@ describe('proposalMachine', () => {
     });
 
     it('should transition to escalated when max iterations reached', () => {
-      const machine = proposalMachine;
-      const actor = createActor(machine, {
-        snapshot: machine.resolveState({ value: 'revision', context: {
+      const actor = createActor(proposalMachine, {
+        snapshot: proposalMachine.resolveState({ value: 'revision', context: {
           proposalId: 'test',
           iterations: 2,
           maxIterations: 2,
@@ -177,9 +175,8 @@ describe('proposalMachine', () => {
 
   describe('disputed transitions', () => {
     it('should transition to approved on ARBITER_DECISION APPROVE', () => {
-      const machine = proposalMachine;
-      const actor = createActor(machine, {
-        snapshot: machine.resolveState({ value: 'disputed', context: {
+      const actor = createActor(proposalMachine, {
+        snapshot: proposalMachine.resolveState({ value: 'disputed', context: {
           proposalId: 'test',
           iterations: 0,
           maxIterations: 2,
@@ -198,9 +195,8 @@ describe('proposalMachine', () => {
     });
 
     it('should transition to rejected on ARBITER_DECISION REJECT', () => {
-      const machine = proposalMachine;
-      const actor = createActor(machine, {
-        snapshot: machine.resolveState({ value: 'disputed', context: {
+      const actor = createActor(proposalMachine, {
+        snapshot: proposalMachine.resolveState({ value: 'disputed', context: {
           proposalId: 'test',
           iterations: 0,
           maxIterations: 2,
@@ -219,9 +215,8 @@ describe('proposalMachine', () => {
     });
 
     it('should transition to approved on HUMAN_DECISION approved', () => {
-      const machine = proposalMachine;
-      const actor = createActor(machine, {
-        snapshot: machine.resolveState({ value: 'disputed', context: {
+      const actor = createActor(proposalMachine, {
+        snapshot: proposalMachine.resolveState({ value: 'disputed', context: {
           proposalId: 'test',
           iterations: 0,
           maxIterations: 2,
@@ -240,9 +235,8 @@ describe('proposalMachine', () => {
     });
 
     it('should transition to rejected on HUMAN_DECISION not approved', () => {
-      const machine = proposalMachine;
-      const actor = createActor(machine, {
-        snapshot: machine.resolveState({ value: 'disputed', context: {
+      const actor = createActor(proposalMachine, {
+        snapshot: proposalMachine.resolveState({ value: 'disputed', context: {
           proposalId: 'test',
           iterations: 0,
           maxIterations: 2,
@@ -263,9 +257,8 @@ describe('proposalMachine', () => {
 
   describe('escalated transitions', () => {
     it('should transition to approved on HUMAN_DECISION approved', () => {
-      const machine = proposalMachine;
-      const actor = createActor(machine, {
-        snapshot: machine.resolveState({ value: 'escalated', context: {
+      const actor = createActor(proposalMachine, {
+        snapshot: proposalMachine.resolveState({ value: 'escalated', context: {
           proposalId: 'test',
           iterations: 3,
           maxIterations: 2,
@@ -284,9 +277,8 @@ describe('proposalMachine', () => {
     });
 
     it('should transition to rejected on HUMAN_DECISION not approved', () => {
-      const machine = proposalMachine;
-      const actor = createActor(machine, {
-        snapshot: machine.resolveState({ value: 'escalated', context: {
+      const actor = createActor(proposalMachine, {
+        snapshot: proposalMachine.resolveState({ value: 'escalated', context: {
           proposalId: 'test',
           iterations: 3,
           maxIterations: 2,
@@ -307,9 +299,8 @@ describe('proposalMachine', () => {
 
   describe('approved transitions', () => {
     it('should transition to implemented on IMPLEMENTATION_COMPLETE', () => {
-      const machine = proposalMachine;
-      const actor = createActor(machine, {
-        snapshot: machine.resolveState({ value: 'approved', context: {
+      const actor = createActor(proposalMachine, {
+        snapshot: proposalMachine.resolveState({ value: 'approved', context: {
           proposalId: 'test',
           iterations: 0,
           maxIterations: 2,
@@ -330,9 +321,8 @@ describe('proposalMachine', () => {
 
   describe('final states', () => {
     it('rejected should be a final state', () => {
-      const machine = proposalMachine;
-      const actor = createActor(machine, {
-        snapshot: machine.resolveState({ value: 'rejected', context: {
+      const actor = createActor(proposalMachine, {
+        snapshot: proposalMachine.resolveState({ value: 'rejected', context: {
           proposalId: 'test',
           iterations: 0,
           maxIterations: 2,
@@ -349,9 +339,8 @@ describe('proposalMachine', () => {
     });
 
     it('implemented should be a final state', () => {
-      const machine = proposalMachine;
-      const actor = createActor(machine, {
-        snapshot: machine.resolveState({ value: 'implemented', context: {
+      const actor = createActor(proposalMachine, {
+        snapshot: proposalMachine.resolveState({ value: 'implemented', context: {
           proposalId: 'test',
           iterations: 0,
           maxIterations: 2,
@@ -408,9 +397,8 @@ describe('proposalMachine', () => {
 
     it('should handle disputed workflow with arbiter', () => {
       // Start with pending_review with one APPROVE vote
-      const machine = proposalMachine;
-      const actor = createActor(machine, {
-        snapshot: machine.resolveState({
+      const actor = createActor(proposalMachine, {
+        snapshot: proposalMachine.resolveState({
           value: 'pending_review',
           context: {
             proposalId: 'test',
@@ -435,10 +423,9 @@ describe('proposalMachine', () => {
     });
 
     it('should escalate after max iterations', () => {
-      const machine = proposalMachine;
       // Start in revision state with iterations = 1 and maxIterations = 1
-      const actor = createActor(machine, {
-        snapshot: machine.resolveState({
+      const actor = createActor(proposalMachine, {
+        snapshot: proposalMachine.resolveState({
           value: 'revision',
           context: {
             proposalId: 'test',

@@ -1,5 +1,6 @@
 import micromatch from 'micromatch';
-import type { CorrumConfig, AgentName, AnalysisResult, ConsensusMode } from '../types/index.js';
+import type { CorrumConfig, AgentName, AnalysisResult, ConsensusMode, ExpertiseAssignment, ExpertiseMatchInfo, ModelName } from '../types/index.js';
+import { matchExpertiseAndAssignAgents } from './expertise-matcher.js';
 
 export interface AnalyzeInput {
   task: string;
@@ -180,6 +181,41 @@ export function analyzeTask(input: AnalyzeInput, config: CorrumConfig): Analysis
     instructions = 'No Corrum review required. Proceed with implementation.';
   }
 
+  // Get expertise-based agent assignments
+  const expertiseResult = matchExpertiseAndAssignAgents(task, files, config);
+
+  // Convert expertise matches to ExpertiseMatchInfo format
+  const expertiseMatches: ExpertiseMatchInfo[] = expertiseResult.matches.map(m => ({
+    expertise: m.expertise,
+    score: m.score,
+    matchedKeywords: m.matchedKeywords,
+    matchedFilePatterns: m.matchedFilePatterns
+  }));
+
+  // Convert agent assignments to ExpertiseAssignment format
+  const convertAssignment = (a: { agentProfile: string; model: string; expertise: string; reason: string; promptFocus: string } | null): ExpertiseAssignment | null => {
+    if (!a) return null;
+    return {
+      agentProfile: a.agentProfile,
+      model: a.model as ModelName,
+      expertise: a.expertise,
+      reason: a.reason,
+      promptFocus: a.promptFocus
+    };
+  };
+
+  const expertiseAssignments = {
+    planner: convertAssignment(expertiseResult.recommendedPlanner),
+    reviewers: expertiseResult.recommendedReviewers.map(r => convertAssignment(r)!).filter(Boolean),
+    arbiter: convertAssignment(expertiseResult.recommendedArbiter)
+  };
+
+  // Enhance instructions with expertise-specific focus
+  let enhancedInstructions = instructions;
+  if (requiresCorrum && expertiseAssignments.planner?.promptFocus) {
+    enhancedInstructions += `\n\nExpertise focus: ${expertiseAssignments.planner.promptFocus}`;
+  }
+
   return {
     requiresCorrum,
     reason: reasons.length > 0 ? reasons.join('; ') : 'No matching rules found',
@@ -195,8 +231,10 @@ export function analyzeTask(input: AnalyzeInput, config: CorrumConfig): Analysis
       arbiter: null,
       implementer: implementer ?? 'claude'
     },
+    expertiseMatches,
+    expertiseAssignments,
     consensusMode,
     nextAction: requiresCorrum ? 'create_proposal' : 'create_proposal',
-    instructions
+    instructions: enhancedInstructions
   };
 }

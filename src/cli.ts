@@ -13,6 +13,7 @@ import { listCommand } from './commands/list.js';
 import { statsCommand } from './commands/stats.js';
 import { verifyCommand } from './commands/verify.js';
 import { guideCommand } from './commands/guide.js';
+import { promptCommand } from './commands/prompt.js';
 
 const program = new Command();
 
@@ -34,5 +35,6 @@ program.addCommand(listCommand);
 program.addCommand(statsCommand);
 program.addCommand(verifyCommand);
 program.addCommand(guideCommand);
+program.addCommand(promptCommand);
 
 program.parse();

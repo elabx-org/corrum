@@ -1,7 +1,34 @@
 // Consensus mode determines how agreement is reached
 export type ConsensusMode = 'majority' | 'unanimous';
 
-// Agent configuration
+// Base model names (the underlying AI CLI tools)
+export type ModelName = 'claude' | 'codex' | 'gemini';
+
+// Model configuration (how to invoke each CLI tool)
+export interface ModelConfig {
+  cli: string;
+  headlessFlag: string;
+  modelFamily: 'anthropic' | 'openai' | 'google';
+}
+
+// Expertise profile (domain-specific focus areas)
+export interface ExpertiseProfile {
+  name: string;
+  description: string;
+  keywords: string[];
+  filePatterns: string[];
+  promptFocus: string;
+}
+
+// Agent profile (combines model + expertise)
+export interface AgentProfile {
+  name: string;
+  model: ModelName;
+  expertise: string;  // references an ExpertiseProfile name
+  description: string;
+}
+
+// Legacy agent configuration (kept for backwards compatibility)
 export interface AgentConfig {
   cli: string;
   headlessFlag: string;
@@ -65,8 +92,13 @@ export interface CorrumConfig {
   rules: RulesConfig;
   paths: PathsConfig;
   templates: TemplatesConfig;
+  models: Record<ModelName, ModelConfig>;
+  expertise: Record<string, ExpertiseProfile>;
+  agentProfiles: Record<string, AgentProfile>;
+  // Legacy - kept for backwards compatibility
   agents: Record<AgentName, AgentConfig>;
   storage: StorageConfig;
 }
 
+// Legacy agent name type (for backwards compatibility)
 export type AgentName = 'claude' | 'codex' | 'gemini';

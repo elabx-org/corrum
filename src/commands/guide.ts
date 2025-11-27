@@ -121,6 +121,7 @@ Once approved, implement the proposal, then mark complete:
 |----------------|---------------------------------------------|
 | analyze        | Check if task needs Corrum review          |
 | propose        | Create a new proposal                       |
+| prompt         | Generate role-specific prompts for agents  |
 | next           | Get next action for a proposal             |
 | add-review     | Record a review from an agent              |
 | decide         | Record final decision (arbiter/human)      |
@@ -130,6 +131,73 @@ Once approved, implement the proposal, then mark complete:
 | stats          | Show metrics and statistics                |
 | verify         | Post-implementation verification           |
 | guide          | Show this guide                            |
+
+## Claude Code Orchestration
+
+Corrum is designed to work with Claude Code as the orchestrator. Claude Code uses its
+Task tool to spawn parallel agents, while Corrum manages the workflow state.
+
+### The prompt Command
+
+Generate role-specific prompts with expertise focus for Claude Code Task agents:
+
+    # Generate planner prompt
+    corrum prompt --role planner --task "Add JWT authentication" --json
+
+    # Generate reviewer prompt (after proposal exists)
+    corrum prompt --role reviewer --proposal "20251127-jwt-auth" --json
+
+    # Generate arbiter prompt (for disputes)
+    corrum prompt --role arbiter --proposal "20251127-jwt-auth" --json
+
+    # Generate implementer prompt (after approval)
+    corrum prompt --role implementer --proposal "20251127-jwt-auth" --json
+
+### Orchestration Flow
+
+Claude Code orchestrates the full workflow:
+
+    // 1. Analyze task and check if Corrum review needed
+    const analysis = await bash('corrum analyze --task "..." --json');
+
+    // 2. Generate planner prompt with expertise focus
+    const plannerPrompt = await bash('corrum prompt --role planner --task "..." --json');
+
+    // 3. Use Task tool to create proposal (Claude Code spawns agent)
+    const proposal = await Task({ prompt: plannerPrompt.prompt, subagent_type: 'general-purpose' });
+
+    // 4. Record the proposal
+    await bash('corrum propose --title "..." --content "...");
+
+    // 5. Generate reviewer prompts
+    const reviewerPrompt = await bash('corrum prompt --role reviewer --proposal "..." --json');
+
+    // 6. Spawn reviewers in parallel using Task tool
+    const reviews = await Promise.all([
+      Task({ prompt: reviewerPrompt.prompt, subagent_type: 'general-purpose' }),
+      // Can spawn multiple reviewers
+    ]);
+
+    // 7. Record reviews
+    await bash('corrum add-review --proposal "..." --agent codex --vote APPROVE --content "...");
+
+    // 8. Check consensus
+    const status = await bash('corrum status --proposal "..." --json');
+
+    // 9. If approved, implement
+    if (status.status === 'approved') {
+      const implPrompt = await bash('corrum prompt --role implementer --proposal "..." --json');
+      await Task({ prompt: implPrompt.prompt, subagent_type: 'general-purpose' });
+      await bash('corrum complete --proposal "...');
+    }
+
+### Benefits of This Architecture
+
+1. **Claude Code as Driver**: Claude Code's Task tool handles agent spawning
+2. **Corrum as State Manager**: Corrum tracks workflow state, not agent lifecycle
+3. **Expertise Injection**: Each role gets domain-specific focus via promptFocus
+4. **Model Agnostic**: Roles determine which model, expertise determines focus
+5. **Parallel Reviews**: Multiple reviewers can run simultaneously
 
 ## Triggers (when Corrum is required)
 
@@ -160,7 +228,82 @@ Once approved, implement the proposal, then mark complete:
 - **/*.sql, **/models.py, **/schemas.py
 - alembic/versions/**
 
-## Roles
+## Expertise System
+
+Corrum uses an expertise-based system to automatically assign the best agents for each task.
+This system decouples **expertise** (domain knowledge) from **models** (AI CLI tools),
+allowing flexible configuration.
+
+### Expertise Profiles
+
+Built-in expertise profiles:
+
+| Expertise   | Focus Areas                                                    |
+|-------------|----------------------------------------------------------------|
+| security    | Auth bypass, injection, data exposure, OWASP top 10            |
+| database    | Data integrity, transactions, N+1 queries, migrations          |
+| api         | Backwards compatibility, versioning, error handling            |
+| performance | Caching, memory leaks, algorithmic complexity                  |
+| frontend    | Accessibility (WCAG), responsive design, state management      |
+| payments    | PCI compliance, idempotency, audit trails, fraud prevention    |
+| general     | Code quality, maintainability, testing, best practices         |
+
+### How Expertise Works
+
+The expertise system is **model-agnostic** - expertise defines *what* to focus on,
+while roles define *which model* to use. This decoupling means:
+
+1. **Expertise matching** - Corrum analyzes the task and files to determine relevant domains
+2. **Role assignment** - Your configured roles (planner, reviewers) determine which models run
+3. **Focus injection** - The matched expertise's promptFocus is injected into the assigned models
+
+### Expertise Matching
+
+When you analyze a task, Corrum automatically:
+
+1. Scans the task description for keywords matching expertise profiles
+2. Matches file patterns against expertise file patterns
+3. Calculates a score for each expertise (keywords weighted higher)
+4. Returns the matched expertise and its promptFocus to inject into your models
+
+Example:
+    corrum analyze --task "Add JWT authentication to user endpoints" --json
+
+Returns expertise_matches showing which expertise matched and why,
+plus the promptFocus that should be injected into your planner/reviewers.
+
+### Configuring Roles (Which Models to Use)
+
+Configure which models handle each role in .corrum-config.toml:
+
+    [roles]
+    defaultPlanner = "claude"      # Claude creates proposals
+    defaultReviewers = ["codex"]   # Codex reviews proposals
+    arbiters = ["gemini", "claude"] # For dispute resolution
+
+The expertise system will inject the appropriate domain focus into whichever
+models you've configured.
+
+### Customizing Expertise Profiles
+
+Add domain-specific focus areas:
+
+    [expertise.devops]
+    name = "devops"
+    description = "DevOps and infrastructure specialist"
+    keywords = ["docker", "kubernetes", "ci", "cd", "pipeline", "deploy"]
+    filePatterns = ["**/Dockerfile", "**/.github/workflows/**", "**/k8s/**"]
+    promptFocus = "Focus on: container security, pipeline reliability, infrastructure as code"
+
+### Available Models
+
+| Model   | CLI Tool | Model Family |
+|---------|----------|--------------|
+| claude  | claude   | anthropic    |
+| codex   | codex    | openai       |
+| gemini  | gemini   | google       |
+
+## Roles (Legacy)
 
 - Planner (default: claude): Creates proposals
 - Reviewer (default: codex): Reviews proposals, votes APPROVE/REJECT/REVISE
@@ -174,6 +317,7 @@ You can override roles when analyzing a task:
     corrum analyze --task "Add auth" --planner gemini --reviewer claude --implementer codex
 
 This allows flexible agent assignment based on task needs.
+Note: These are legacy overrides. The new expertise system provides automatic matching.
 
 ## State Machine
 
@@ -226,6 +370,7 @@ export const guideCommand = new Command('guide')
         commands: [
           { name: 'analyze', description: 'Check if task needs Corrum review', example: 'corrum analyze --task "Add auth"' },
           { name: 'propose', description: 'Create a new proposal', example: 'corrum propose --title "feature-name" --content "..."' },
+          { name: 'prompt', description: 'Generate role-specific prompts for agents', example: 'corrum prompt --role reviewer --proposal "ID" --json' },
           { name: 'next', description: 'Get next action for a proposal', example: 'corrum next --proposal "ID"' },
           { name: 'add-review', description: 'Record a review', example: 'corrum add-review --proposal "ID" --agent codex --vote APPROVE' },
           { name: 'decide', description: 'Record final decision', example: 'corrum decide --proposal "ID" --outcome approved' },
@@ -235,6 +380,16 @@ export const guideCommand = new Command('guide')
           { name: 'stats', description: 'Show statistics', example: 'corrum stats' },
           { name: 'verify', description: 'Verify implementation', example: 'corrum verify --proposal "ID"' }
         ],
+        prompt_command: {
+          description: 'Generate role-specific prompts with expertise focus for Claude Code Task agents',
+          roles: ['planner', 'reviewer', 'arbiter', 'implementer'],
+          examples: {
+            planner: 'corrum prompt --role planner --task "Add JWT auth" --json',
+            reviewer: 'corrum prompt --role reviewer --proposal "ID" --json',
+            arbiter: 'corrum prompt --role arbiter --proposal "ID" --json',
+            implementer: 'corrum prompt --role implementer --proposal "ID" --json'
+          }
+        },
         triggers: {
           user_request_patterns: ['use corrum', 'code review', 'review this', 'need review', 'multi-agent review'],
           keywords: ['auth', 'authentication', 'password', 'token', 'jwt', 'security', 'sql', 'database', 'migration', 'api', 'payment', 'delete'],
@@ -245,6 +400,28 @@ export const guideCommand = new Command('guide')
           reviewer: 'codex (default)',
           arbiters: ['gemini', 'claude'],
           implementer: 'claude (default)'
+        },
+        expertise_system: {
+          description: 'Expertise profiles are model-agnostic. They define WHAT to focus on, while roles define WHICH model to use.',
+          profiles: {
+            security: { keywords: ['auth', 'authentication', 'password', 'token', 'jwt', 'security', 'encrypt', 'hash'], focus: 'Auth bypass, injection, data exposure, OWASP top 10' },
+            database: { keywords: ['sql', 'database', 'migration', 'schema', 'transaction', 'query'], focus: 'Data integrity, transactions, N+1 queries, migrations' },
+            api: { keywords: ['api', 'endpoint', 'rest', 'graphql', 'route', 'versioning'], focus: 'Backwards compatibility, versioning, error handling' },
+            performance: { keywords: ['performance', 'cache', 'optimize', 'latency', 'memory', 'scaling'], focus: 'Caching, memory leaks, algorithmic complexity' },
+            frontend: { keywords: ['react', 'vue', 'component', 'ui', 'accessibility', 'a11y'], focus: 'Accessibility (WCAG), responsive design, state management' },
+            payments: { keywords: ['payment', 'billing', 'subscription', 'stripe', 'invoice'], focus: 'PCI compliance, idempotency, audit trails, fraud prevention' },
+            general: { keywords: [], focus: 'Code quality, maintainability, testing, best practices' }
+          },
+          models: {
+            claude: { cli: 'claude', family: 'anthropic' },
+            codex: { cli: 'codex', family: 'openai' },
+            gemini: { cli: 'gemini', family: 'google' }
+          },
+          how_it_works: [
+            '1. Expertise matching determines WHAT domain focus is relevant (security, database, etc.)',
+            '2. Role configuration determines WHICH models to use (planner=claude, reviewers=[codex])',
+            '3. The matched expertise promptFocus is injected into whichever models are assigned'
+          ]
         },
         votes: ['APPROVE', 'REJECT', 'REVISE'],
         consensus_modes: {

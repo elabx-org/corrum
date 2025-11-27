@@ -221,9 +221,12 @@ export function getNextActionForState(
 }
 
 // Create a machine instance with specific context
+// In XState v5, context customization is done when creating an actor via snapshot
+// This function returns the base machine - use createActor with snapshot option
+// to start from a specific context/state
 export function createProposalMachineWithContext(
-  proposalId: string,
-  options: {
+  _proposalId: string,
+  _options: {
     maxIterations?: number;
     requireUnanimous?: boolean;
     initialState?: ProposalStatus;
@@ -231,9 +234,10 @@ export function createProposalMachineWithContext(
     arbiter?: AgentName;
   } = {}
 ) {
-  return proposalMachine.provide({
-    // Custom implementations can be added here
-  });
+  // In XState v5, the preferred pattern is to use createActor with a snapshot
+  // that includes the custom context. This function returns the base machine
+  // for API compatibility.
+  return proposalMachine;
 }
 
 export type ProposalMachineState = StateFrom<typeof proposalMachine>;

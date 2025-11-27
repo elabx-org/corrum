@@ -156,10 +156,20 @@ export const initCommand = new Command('init')
       console.log('');
       logger.success('Corrum initialized successfully!');
       console.log('');
+      logger.info('Configuration created with:');
+      logger.dim('  - Expertise profiles: security, database, api, performance, frontend, payments, general');
+      logger.dim('  - Consensus modes: majority (default), unanimous');
+      logger.dim('  - Models: claude, codex, gemini');
+      console.log('');
       logger.info('Next steps:');
-      logger.dim('  1. Edit .corrum-config.toml to customize settings');
+      logger.dim('  1. Edit .corrum-config.toml to customize roles and expertise');
       logger.dim('  2. Run `corrum analyze --task "your task"` to check if review is needed');
-      logger.dim('  3. Run `corrum propose --title "title"` to create a proposal');
+      logger.dim('  3. Run `corrum guide` to see the full workflow');
+      console.log('');
+      logger.info('Claude Code orchestration:');
+      logger.dim('  - Use `corrum prompt --role planner --task "..."` to generate prompts');
+      logger.dim('  - Prompts include expertise focus for Task tool agents');
+      logger.dim('  - Run `corrum guide --json` for machine-readable documentation');
     } catch (error) {
       logger.error(`Failed to initialize: ${error}`);
       process.exit(1);

@@ -28,7 +28,9 @@
       "Bash(corrum:*)",
       "Bash(git branch:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nInitial commit: Corrum multi-agent code review orchestrator\n\nFeatures:\n- Task analysis with keyword/file pattern triggers\n- Natural language consensus mode detection (majority/unanimous)\n- Proposal lifecycle management via XState state machine\n- SQLite storage backend\n- CLI commands: analyze, propose, next, add-review, decide, complete, status, list, stats, verify, guide\n- Role override support (planner, reviewer, implementer)\n- 115 passing tests\n\n🤖 Generated with [Claude Code](https://claude.ai/code)\nvia [Happy](https://happy.engineering)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nCo-Authored-By: Happy <yesreply@happy.engineering>\nEOF\n)\")"
+      "Bash(git commit -m \"$(cat <<''EOF''\nInitial commit: Corrum multi-agent code review orchestrator\n\nFeatures:\n- Task analysis with keyword/file pattern triggers\n- Natural language consensus mode detection (majority/unanimous)\n- Proposal lifecycle management via XState state machine\n- SQLite storage backend\n- CLI commands: analyze, propose, next, add-review, decide, complete, status, list, stats, verify, guide\n- Role override support (planner, reviewer, implementer)\n- 115 passing tests\n\n🤖 Generated with [Claude Code](https://claude.ai/code)\nvia [Happy](https://happy.engineering)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nCo-Authored-By: Happy <yesreply@happy.engineering>\nEOF\n)\")",
+      "Bash(git commit:*)",
+      "Bash(git push)"
     ],
     "deny": [],
     "ask": []

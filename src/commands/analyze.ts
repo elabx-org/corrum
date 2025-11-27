@@ -58,6 +58,35 @@ export const analyzeCommand = new Command('analyze')
             arbiter: result.assignedRoles.arbiter,
             implementer: result.assignedRoles.implementer
           },
+          expertise_matches: result.expertiseMatches?.map(m => ({
+            expertise: m.expertise,
+            score: m.score,
+            matched_keywords: m.matchedKeywords,
+            matched_file_patterns: m.matchedFilePatterns
+          })),
+          expertise_assignments: result.expertiseAssignments ? {
+            planner: result.expertiseAssignments.planner ? {
+              agent_profile: result.expertiseAssignments.planner.agentProfile,
+              model: result.expertiseAssignments.planner.model,
+              expertise: result.expertiseAssignments.planner.expertise,
+              reason: result.expertiseAssignments.planner.reason,
+              prompt_focus: result.expertiseAssignments.planner.promptFocus
+            } : null,
+            reviewers: result.expertiseAssignments.reviewers.map(r => ({
+              agent_profile: r.agentProfile,
+              model: r.model,
+              expertise: r.expertise,
+              reason: r.reason,
+              prompt_focus: r.promptFocus
+            })),
+            arbiter: result.expertiseAssignments.arbiter ? {
+              agent_profile: result.expertiseAssignments.arbiter.agentProfile,
+              model: result.expertiseAssignments.arbiter.model,
+              expertise: result.expertiseAssignments.arbiter.expertise,
+              reason: result.expertiseAssignments.arbiter.reason,
+              prompt_focus: result.expertiseAssignments.arbiter.promptFocus
+            } : null
+          } : undefined,
           consensus_mode: result.consensusMode,
           next_action: result.nextAction,
           instructions: result.instructions
@@ -81,10 +110,40 @@ export const analyzeCommand = new Command('analyze')
           logger.dim(`Matched file patterns: ${result.matchedRules.filePatterns.join(', ')}`);
         }
 
+        // Display expertise matches
+        if (result.expertiseMatches && result.expertiseMatches.length > 0) {
+          console.log('');
+          logger.info('Expertise matches:');
+          for (const match of result.expertiseMatches) {
+            const details = [];
+            if (match.matchedKeywords.length > 0) details.push(`keywords: ${match.matchedKeywords.join(', ')}`);
+            if (match.matchedFilePatterns.length > 0) details.push(`patterns: ${match.matchedFilePatterns.join(', ')}`);
+            logger.dim(`  ${match.expertise} (score: ${match.score})${details.length > 0 ? ` - ${details.join('; ')}` : ''}`);
+          }
+        }
+
         console.log('');
-        logger.info(`Assigned planner: ${result.assignedRoles.planner}`);
-        logger.info(`Assigned reviewers: ${result.assignedRoles.reviewers.join(', ')}`);
-        logger.info(`Assigned implementer: ${result.assignedRoles.implementer}`);
+        // Display expertise-based assignments if available
+        if (result.expertiseAssignments) {
+          logger.info('Expertise-based agent assignments:');
+          if (result.expertiseAssignments.planner) {
+            const p = result.expertiseAssignments.planner;
+            logger.dim(`  Planner: ${p.agentProfile} (${p.model}) - ${p.reason}`);
+          }
+          for (const r of result.expertiseAssignments.reviewers) {
+            logger.dim(`  Reviewer: ${r.agentProfile} (${r.model}) - ${r.reason}`);
+          }
+          if (result.expertiseAssignments.arbiter) {
+            const a = result.expertiseAssignments.arbiter;
+            logger.dim(`  Arbiter: ${a.agentProfile} (${a.model}) - ${a.reason}`);
+          }
+          console.log('');
+        }
+
+        // Legacy role display
+        logger.dim(`Legacy assigned planner: ${result.assignedRoles.planner}`);
+        logger.dim(`Legacy assigned reviewers: ${result.assignedRoles.reviewers.join(', ')}`);
+        logger.dim(`Legacy assigned implementer: ${result.assignedRoles.implementer}`);
         logger.info(`Consensus mode: ${result.consensusMode}`);
         console.log('');
         logger.dim(`Next action: ${result.nextAction}`);
