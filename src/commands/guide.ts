@@ -11,6 +11,38 @@ handles the workflow orchestration.
 **Key principle**: Corrum helps manage the review process, it doesn't gatekeep.
 When users ask for a review, Corrum always proceeds.
 
+## Full Automated Workflow - The run Command
+
+The \`run\` command executes the complete Corrum workflow automatically:
+
+    # Dry-run: preview what would happen without executing agents
+    corrum run --task "Add JWT authentication" --dry-run
+
+    # Full execution: actually run AI agents (claude, codex, gemini)
+    corrum run --task "Add JWT authentication"
+
+    # With options
+    corrum run --task "Add JWT auth" --consensus-mode unanimous --timeout 600000
+
+This will:
+1. Analyze the task and match expertise
+2. Execute planner agent to create proposal
+3. Execute reviewer agents (in sequence)
+4. Evaluate votes per consensus mode
+5. Execute implementer agent (if approved)
+
+Options:
+- --dry-run: Preview without executing agents
+- --mock: Simulate agent responses (for testing without real CLIs)
+- --skip-implementation: Stop after approval
+- --timeout <ms>: Agent timeout (default: 300000)
+- --json: Output JSON, emit progress events
+
+Execution Modes:
+- DRY-RUN: Shows what would happen without any execution
+- MOCK: Simulates agent responses for testing (no real CLIs needed)
+- REAL: Actually executes AI agents (requires claude/codex/gemini CLIs)
+
 ## When Corrum Review is Triggered
 
 Corrum review is ALWAYS triggered when:
@@ -119,14 +151,16 @@ Once approved, implement the proposal, then mark complete:
 
 | Command        | Purpose                                    |
 |----------------|---------------------------------------------|
+| run            | **Full automated workflow** with visual progress |
 | analyze        | Check if task needs Corrum review          |
+| workflow       | Get workflow state with progress events    |
 | propose        | Create a new proposal                       |
 | prompt         | Generate role-specific prompts for agents  |
 | next           | Get next action for a proposal             |
 | add-review     | Record a review from an agent              |
 | decide         | Record final decision (arbiter/human)      |
 | complete       | Mark proposal as implemented               |
-| status         | Check proposal status                       |
+| status         | Check proposal status with workflow progress |
 | list           | List all proposals with filters            |
 | stats          | Show metrics and statistics                |
 | verify         | Post-implementation verification           |
@@ -303,6 +337,65 @@ Add domain-specific focus areas:
 | codex   | codex    | openai       |
 | gemini  | gemini   | google       |
 
+### Claude CLI Headless Mode
+
+By default, Corrum runs claude with flags for headless operation:
+
+    claude -p --dangerously-skip-permissions "prompt"
+
+**Flags explained:**
+- \`-p\` - Print mode (non-interactive output)
+- \`--dangerously-skip-permissions\` - Bypass permission checks for automated execution
+
+**Note:** The \`--tools\` flag is NOT used because it's a variadic option that would
+consume subsequent arguments including the prompt.
+
+**Important:** Claude CLI in print mode still reads the current directory context
+(CLAUDE.md, etc.), which can add processing time for complex codebases.
+
+**Fast mode:** Use the \`--fast\` flag to skip loading project context:
+
+    corrum run --task "Add auth" --fast
+
+This adds \`--setting-sources ""\` to Claude commands, skipping CLAUDE.md and other
+project settings for faster responses. Trade-off: Claude won't have project-specific context.
+
+**Customizing via config** (.corrum-config.toml):
+
+    [models.claude]
+    cli = "claude"
+    headlessFlag = "-p"
+    extraFlags = ["--dangerously-skip-permissions"]
+
+### Codex Sandbox Bypass
+
+By default, Corrum runs codex with flags to bypass sandbox restrictions for automated execution:
+
+    codex exec --dangerously-auto-approve --sandbox none --quiet "prompt"
+
+This is necessary because codex's sandbox can block file operations in automated contexts.
+
+**Flags explained:**
+- \`--dangerously-auto-approve\` - Auto-approve tool calls without prompting
+- \`--sandbox none\` - Disable sandbox restrictions
+- \`--quiet\` - Suppress interactive UI elements
+
+**Customizing via config** (.corrum-config.toml):
+
+    [models.codex]
+    cli = "codex"
+    headlessFlag = "exec"
+    extraFlags = ["--dangerously-auto-approve", "--sandbox", "none", "--quiet"]
+
+**For Docker/hardened environments** (full bypass):
+
+    [models.codex]
+    cli = "codex"
+    headlessFlag = ""
+    extraFlags = ["--dangerously-bypass-approvals-and-sandbox"]
+
+See: https://developers.openai.com/codex/cli/reference/
+
 ## Roles (Legacy)
 
 - Planner (default: claude): Creates proposals
@@ -332,6 +425,55 @@ All commands support --json flag for machine-readable output:
 
     corrum analyze --task "Add auth" --json
     corrum status --proposal "..." --json
+
+## Progress Events & Real-Time Feedback
+
+Corrum supports emitting progress events to stderr in NDJSON format for real-time feedback.
+
+### The --progress Flag
+
+Add --progress to commands to emit workflow events:
+
+    # Workflow with progress events (recommended for Claude Code)
+    corrum workflow --task "Add JWT auth" --progress --json
+
+    # Analyze with progress
+    corrum analyze --task "Add JWT auth" --progress --json
+
+    # Status with progress
+    corrum status --proposal "..." --progress --json
+
+### Event Types
+
+Events are emitted to stderr as NDJSON, while results go to stdout:
+
+    {"event":"workflow_started","task":"Add JWT auth","phase":"analysis","timestamp":"..."}
+    {"event":"expertise_matched","expertise":"security","score":6,"promptFocus":"..."}
+    {"event":"analysis_complete","requiresReview":true,"expertise":"security","triggers":["auth","jwt"]}
+    {"event":"phase_complete","phase":"analysis"}
+    {"event":"review_received","agent":"codex","vote":"APPROVE","current":1,"total":1}
+    {"event":"consensus_reached","outcome":"approved","mode":"majority"}
+    {"event":"workflow_complete","status":"approved","proposalId":"..."}
+
+### Workflow Phases
+
+| Phase           | Description                           |
+|-----------------|---------------------------------------|
+| analysis        | Task analysis and expertise matching  |
+| planning        | Proposal creation                     |
+| review          | Collecting reviews from agents        |
+| consensus       | Evaluating votes                      |
+| arbitration     | Dispute resolution                    |
+| implementation  | Executing approved changes            |
+| complete        | Workflow finished                     |
+
+### Enhanced Status with Workflow Progress
+
+The status command now includes workflow progress information:
+
+    corrum status --proposal "..." --json
+
+Returns workflow progress with phases_complete, phases_pending, progress_pct, and reviews tracking.
 
 ## Configuration
 
@@ -368,14 +510,16 @@ export const guideCommand = new Command('guide')
       console.log(JSON.stringify({
         guide: GUIDE_TEXT,
         commands: [
-          { name: 'analyze', description: 'Check if task needs Corrum review', example: 'corrum analyze --task "Add auth"' },
+          { name: 'run', description: 'Full automated workflow with visual progress', example: 'corrum run --task "Add auth" --mock', options: ['--dry-run: Preview without execution', '--mock: Simulate agent responses', '--skip-implementation: Stop after approval', '--json: Output JSON with progress events', '--timeout <ms>: Agent timeout'] },
+          { name: 'analyze', description: 'Check if task needs Corrum review', example: 'corrum analyze --task "Add auth" --progress --json' },
+          { name: 'workflow', description: 'Get workflow state with progress events', example: 'corrum workflow --task "Add auth" --progress --json' },
           { name: 'propose', description: 'Create a new proposal', example: 'corrum propose --title "feature-name" --content "..."' },
           { name: 'prompt', description: 'Generate role-specific prompts for agents', example: 'corrum prompt --role reviewer --proposal "ID" --json' },
           { name: 'next', description: 'Get next action for a proposal', example: 'corrum next --proposal "ID"' },
           { name: 'add-review', description: 'Record a review', example: 'corrum add-review --proposal "ID" --agent codex --vote APPROVE' },
           { name: 'decide', description: 'Record final decision', example: 'corrum decide --proposal "ID" --outcome approved' },
           { name: 'complete', description: 'Mark as implemented', example: 'corrum complete --proposal "ID"' },
-          { name: 'status', description: 'Check proposal status', example: 'corrum status --proposal "ID"' },
+          { name: 'status', description: 'Check proposal status with workflow progress', example: 'corrum status --proposal "ID" --progress --json' },
           { name: 'list', description: 'List proposals', example: 'corrum list --status approved' },
           { name: 'stats', description: 'Show statistics', example: 'corrum stats' },
           { name: 'verify', description: 'Verify implementation', example: 'corrum verify --proposal "ID"' }
@@ -413,9 +557,48 @@ export const guideCommand = new Command('guide')
             general: { keywords: [], focus: 'Code quality, maintainability, testing, best practices' }
           },
           models: {
-            claude: { cli: 'claude', family: 'anthropic' },
-            codex: { cli: 'codex', family: 'openai' },
-            gemini: { cli: 'gemini', family: 'google' }
+            claude: {
+              cli: 'claude',
+              family: 'anthropic',
+              headlessFlag: '-p',
+              extraFlags: ['--dangerously-skip-permissions'],
+              note: 'Permission bypass for automated execution. Note: --tools is NOT used (variadic flag consumes prompt)'
+            },
+            codex: {
+              cli: 'codex',
+              family: 'openai',
+              headlessFlag: 'exec',
+              extraFlags: ['--dangerously-auto-approve', '--sandbox', 'none', '--quiet'],
+              note: 'Sandbox bypass flags for automated execution'
+            },
+            gemini: { cli: 'gemini', family: 'google', headlessFlag: '' }
+          },
+          claude_headless_mode: {
+            description: 'Claude runs with permission bypass flags for automated execution',
+            default_command: 'claude -p --dangerously-skip-permissions "prompt"',
+            fast_mode_command: 'claude -p --dangerously-skip-permissions --setting-sources "" "prompt"',
+            flags: {
+              '-p': 'Print mode (non-interactive output)',
+              '--dangerously-skip-permissions': 'Bypass permission checks for automated execution',
+              '--setting-sources ""': 'Skip loading project context (CLAUDE.md, etc.) - used with --fast flag'
+            },
+            notes: [
+              '--tools flag is NOT used (variadic option consumes the prompt argument)',
+              'Claude CLI still reads directory context (CLAUDE.md, etc.) which adds processing time',
+              'Use --fast flag to skip project context for faster responses',
+              'Use --mock mode for testing without real CLI tools'
+            ]
+          },
+          codex_sandbox_bypass: {
+            description: 'Codex runs with sandbox bypass flags by default for automated execution',
+            default_command: 'codex exec --dangerously-auto-approve --sandbox none --quiet "prompt"',
+            flags: {
+              '--dangerously-auto-approve': 'Auto-approve tool calls without prompting',
+              '--sandbox none': 'Disable sandbox restrictions',
+              '--quiet': 'Suppress interactive UI elements'
+            },
+            full_bypass: '--dangerously-bypass-approvals-and-sandbox',
+            docs: 'https://developers.openai.com/codex/cli/reference/'
           },
           how_it_works: [
             '1. Expertise matching determines WHAT domain focus is relevant (security, database, etc.)',
@@ -455,6 +638,90 @@ export const guideCommand = new Command('guide')
             unanimous: ['all agree', 'all to agree', 'must all agree', 'everyone agree', 'unanimous', 'full agreement', 'complete agreement', 'all agents agree', 'all agents to agree', 'all must approve', 'everyone must approve', 'all reviewers agree', 'need all to agree', 'require unanimous', 'require all'],
             majority: ['majority', 'majority vote', 'majority wins', 'most agree', 'majority rules', 'simple majority']
           }
+        },
+        progress_events: {
+          description: 'Real-time workflow feedback via NDJSON events to stderr',
+          flag: '--progress',
+          supported_commands: ['analyze', 'workflow', 'status'],
+          event_types: [
+            'workflow_started',
+            'workflow_complete',
+            'workflow_error',
+            'phase_started',
+            'phase_complete',
+            'analysis_complete',
+            'expertise_matched',
+            'proposal_created',
+            'review_requested',
+            'review_received',
+            'consensus_checked',
+            'consensus_reached',
+            'dispute_detected',
+            'arbiter_invoked',
+            'arbiter_decision',
+            'implementation_started',
+            'implementation_complete',
+            'human_escalation'
+          ],
+          phases: ['analysis', 'planning', 'review', 'consensus', 'arbitration', 'implementation', 'complete'],
+          example: {
+            command: 'corrum workflow --task "Add JWT auth" --progress --json',
+            stderr_events: [
+              '{"event":"workflow_started","task":"Add JWT auth","phase":"analysis","timestamp":"..."}',
+              '{"event":"expertise_matched","expertise":"security","score":6,"promptFocus":"..."}',
+              '{"event":"analysis_complete","requiresReview":true,"expertise":"security","triggers":["auth","jwt"]}',
+              '{"event":"phase_complete","phase":"analysis"}'
+            ],
+            stdout_result: 'JSON object with workflow_state, analysis, assigned_agents, etc.'
+          }
+        },
+        workflow_command: {
+          description: 'Get workflow state with real-time progress events',
+          options: {
+            task: 'Start new workflow with task description',
+            proposal: 'Get state for existing proposal',
+            progress: 'Emit NDJSON progress events to stderr',
+            json: 'Output results as JSON to stdout'
+          },
+          examples: {
+            new_workflow: 'corrum workflow --task "Add JWT auth" --progress --json',
+            existing_proposal: 'corrum workflow --proposal "20251127-jwt" --json',
+            list_active: 'corrum workflow --json'
+          }
+        },
+        run_command: {
+          description: 'Full automated workflow with visual progress and agent execution',
+          options: {
+            task: 'Required. Task description',
+            files: 'Files that will be modified',
+            consensus_mode: 'majority or unanimous',
+            dry_run: 'Preview without executing agents (shows what would happen)',
+            mock: 'Simulate agent responses for testing (no real CLIs needed)',
+            fast: 'Skip loading project context (CLAUDE.md) for faster agent responses',
+            verbose: 'Show detailed progress (default: true)',
+            json: 'Output JSON results, emit progress events',
+            timeout: 'Agent execution timeout in ms (default: 600000)',
+            skip_implementation: 'Stop after approval, don\'t implement'
+          },
+          execution_modes: {
+            dry_run: 'Shows what would happen without any execution',
+            mock: 'Simulates agent responses for testing (no real CLIs needed)',
+            fast: 'Skip project context for faster responses (--setting-sources "")',
+            real: 'Actually executes AI agents (requires claude/codex/gemini CLIs)'
+          },
+          examples: {
+            dry_run: 'corrum run --task "Add JWT auth" --dry-run',
+            mock: 'corrum run --task "Add JWT auth" --mock',
+            fast: 'corrum run --task "Add JWT auth" --fast',
+            full_execution: 'corrum run --task "Add JWT auth"',
+            with_options: 'corrum run --task "Add JWT auth" --consensus-mode unanimous --timeout 600000',
+            mock_with_json: 'corrum run --task "Add JWT auth" --mock --json'
+          },
+          visual_output: {
+            phase_icons: '🔍 → 📝 → 👀 → 🤝 → 🔨 → ✅',
+            features: ['Spinners during agent execution', 'Color-coded vote display', 'Expertise matching with focus areas', 'Total execution time']
+          },
+          phases: ['analysis', 'planning', 'review', 'consensus', 'implementation']
         }
       }, null, 2));
     } else {

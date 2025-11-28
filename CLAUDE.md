@@ -35,6 +35,12 @@ corrum init
 # Check if review needed
 corrum analyze --task "Add JWT authentication"
 
+# Full automated workflow (dry-run to preview)
+corrum run --task "Add JWT authentication" --dry-run
+
+# Full automated workflow (actually execute agents)
+corrum run --task "Add JWT authentication"
+
 # Generate prompt for Claude Code Task tool
 corrum prompt --role planner --task "Add JWT auth" --json
 
@@ -57,12 +63,82 @@ corrum status --proposal "..."
 |---------|---------|
 | `corrum init` | Initialize project with config and directories |
 | `corrum analyze --task "..."` | Check if Corrum review is needed |
+| `corrum run --task "..."` | **Full automated workflow** - executes agents, shows visual progress |
+| `corrum workflow --task "..."` | Start workflow with progress events |
 | `corrum prompt --role <role>` | Generate prompts for Task tool agents |
 | `corrum propose --title "..."` | Create a proposal |
 | `corrum add-review` | Record agent review |
-| `corrum status --proposal "..."` | Check consensus status |
+| `corrum status --proposal "..."` | Check consensus status with workflow progress |
 | `corrum guide` | Show full workflow guide |
 | `corrum guide --json` | Get machine-readable documentation |
+
+## The `run` Command (Full Automated Workflow)
+
+The `run` command executes the complete Corrum workflow automatically, spawning AI agents and showing visual progress:
+
+```bash
+# Dry-run: preview what would happen without executing agents
+corrum run --task "Add JWT authentication" --dry-run
+
+# Full execution: actually run AI agents (claude, codex, gemini)
+corrum run --task "Add JWT authentication"
+
+# With options
+corrum run --task "Add JWT auth" \
+  --files "src/auth/**" \
+  --consensus-mode unanimous \
+  --timeout 600000 \
+  --skip-implementation
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--task <description>` | Required. Task description |
+| `--files <files...>` | Files that will be modified |
+| `--consensus-mode <mode>` | `majority` or `unanimous` |
+| `--dry-run` | Preview without executing agents (shows what would happen) |
+| `--mock` | Use simulated agent responses for testing (no real CLIs needed) |
+| `--verbose` | Show detailed progress (default: true) |
+| `--json` | Output results as JSON, emit progress events |
+| `--timeout <ms>` | Agent execution timeout (default: 300000) |
+| `--skip-implementation` | Stop after approval, don't implement |
+
+### Execution Modes
+
+```bash
+# DRY-RUN: Shows what would happen without any execution
+corrum run --task "Add JWT auth" --dry-run
+
+# MOCK: Simulates agent responses (for testing without real CLIs)
+corrum run --task "Add JWT auth" --mock
+
+# REAL: Actually executes AI agents (requires claude/codex/gemini CLIs)
+corrum run --task "Add JWT auth"
+```
+
+**When to use each mode:**
+- `--dry-run`: Preview workflow without any execution
+- `--mock`: Test full workflow with simulated responses (useful when CLIs not installed)
+- (no flag): Production use with real AI agents
+
+### Visual Output
+
+The run command shows real-time progress with:
+- Phase icons: 🔍 → 📝 → 👀 → 🤝 → 🔨 → ✅
+- Spinners during agent execution
+- Color-coded vote display (✓ APPROVE, ✗ REJECT, ⚠ REVISE)
+- Expertise matching with focus areas
+- Total execution time
+
+### Phases
+
+1. **Analysis** - Check if review needed, match expertise
+2. **Planning** - Execute planner agent to create proposal
+3. **Review** - Execute reviewer agents in sequence
+4. **Consensus** - Evaluate votes per consensus mode
+5. **Implementation** - Execute implementer agent (if approved)
 
 ## The `prompt` Command (Claude Code Integration)
 
@@ -149,7 +225,10 @@ Corrum review is automatically required for:
 src/
 ├── cli.ts              # Entry point
 ├── commands/           # CLI commands
-│   ├── analyze.ts      # Task analysis
+│   ├── analyze.ts      # Task analysis (--progress flag)
+│   ├── run.ts          # Full automated workflow with visual UI
+│   ├── workflow.ts     # Workflow orchestration with progress events
+│   ├── status.ts       # Status with workflow progress
 │   ├── prompt.ts       # Generate agent prompts
 │   ├── propose.ts      # Create proposals
 │   ├── guide.ts        # Documentation
@@ -157,13 +236,18 @@ src/
 ├── core/
 │   ├── analyzer.ts     # Task analysis + expertise matching
 │   ├── expertise-matcher.ts  # Expertise scoring
-│   ├── consensus.ts    # Vote evaluation
+│   ├── consensus.ts    # Vote evaluation (evaluateConsensus, evaluateConsensusSimple)
+│   ├── events.ts       # Workflow event system (NDJSON progress)
+│   ├── agent-executor.ts  # Spawn AI CLI tools (claude, codex, gemini)
 │   └── state-machine.ts # XState proposal lifecycle
 ├── config/
 │   ├── defaults.ts     # Default expertise, agent profiles
 │   └── loader.ts       # Config file generation
 ├── storage/
 │   └── sqlite.ts       # SQLite backend (better-sqlite3)
+├── utils/
+│   ├── ui.ts           # Visual UI: Spinners, ProgressBar, colors
+│   └── logger.ts       # Logging utilities
 └── types/
     ├── config.ts       # CorrumConfig, ExpertiseProfile, etc.
     └── state.ts        # AnalysisResult, ExpertiseAssignment
@@ -174,6 +258,75 @@ src/
 ```bash
 npm test           # Run all 145 tests
 npm run build      # Build with tsup
+```
+
+## Progress Events & Real-Time Feedback
+
+Corrum supports emitting progress events to stderr in NDJSON format for real-time feedback to Claude Code.
+
+### The `--progress` Flag
+
+Add `--progress` to commands to emit workflow events:
+
+```bash
+# Workflow with progress events
+corrum workflow --task "Add JWT auth" --progress --json
+
+# Analyze with progress
+corrum analyze --task "Add JWT auth" --progress --json
+
+# Status with progress
+corrum status --proposal "..." --progress --json
+```
+
+### Event Types
+
+Events are emitted to **stderr** as NDJSON, while results go to **stdout**:
+
+```json
+{"event":"workflow_started","task":"Add JWT auth","phase":"analysis","timestamp":"..."}
+{"event":"expertise_matched","phase":"analysis","expertise":"security","score":6,"promptFocus":"..."}
+{"event":"analysis_complete","phase":"analysis","requiresReview":true,"expertise":"security","triggers":["auth","jwt"]}
+{"event":"phase_complete","phase":"analysis","details":{...}}
+{"event":"review_requested","phase":"review","agent":"codex","current":1,"total":1}
+{"event":"review_received","phase":"review","agent":"codex","vote":"APPROVE","current":1,"total":1}
+{"event":"consensus_reached","phase":"consensus","outcome":"approved","mode":"majority"}
+{"event":"workflow_complete","status":"approved","proposalId":"...","phase":"complete"}
+```
+
+### Workflow Phases
+
+| Phase | Description |
+|-------|-------------|
+| `analysis` | Task analysis and expertise matching |
+| `planning` | Proposal creation |
+| `review` | Collecting reviews from agents |
+| `consensus` | Evaluating votes |
+| `arbitration` | Dispute resolution |
+| `implementation` | Executing approved changes |
+| `complete` | Workflow finished |
+
+### Enhanced Status Output
+
+The `status` command now includes workflow progress:
+
+```json
+{
+  "proposal_id": "...",
+  "status": "pending_review",
+  "workflow": {
+    "current_phase": "review",
+    "phases_complete": ["analysis", "planning"],
+    "phases_pending": ["consensus", "implementation", "complete"],
+    "progress_pct": 45,
+    "reviews_received": 1,
+    "reviews_expected": 2
+  },
+  "consensus": {
+    "reached": false,
+    "mode": "majority"
+  }
+}
 ```
 
 ## Claude Code Orchestration Flow
@@ -239,6 +392,64 @@ Key sections:
 - **micromatch**: File pattern matching
 - **@iarna/toml**: TOML config parsing
 - **zod**: Schema validation
+
+## Agent CLI Configuration
+
+### Claude CLI Headless Mode
+
+By default, Corrum runs claude with flags for headless operation:
+
+```bash
+claude -p --dangerously-skip-permissions --tools "" "prompt"
+```
+
+This is necessary because:
+- The `-p` flag enables print mode (non-interactive)
+- The `--dangerously-skip-permissions` flag bypasses permission checks for automated execution
+- The `--tools ""` flag disables all tools (agent only needs to generate text)
+
+**Customizing via config** (`.corrum-config.toml`):
+
+```toml
+[models.claude]
+cli = "claude"
+headlessFlag = "-p"
+extraFlags = ["--dangerously-skip-permissions", "--tools", ""]
+```
+
+### Codex Sandbox Bypass
+
+By default, Corrum runs codex with flags to bypass sandbox restrictions for automated execution:
+
+```bash
+codex exec --dangerously-auto-approve --sandbox none --quiet "prompt"
+```
+
+This is necessary because:
+- Codex's sandbox can block file operations in automated contexts
+- The `--dangerously-auto-approve` flag auto-approves tool calls
+- The `--sandbox none` disables sandbox restrictions
+- The `--quiet` flag suppresses interactive UI elements
+
+**Customizing via config** (`.corrum-config.toml`):
+
+```toml
+[models.codex]
+cli = "codex"
+headlessFlag = "exec"
+extraFlags = ["--dangerously-auto-approve", "--sandbox", "none", "--quiet"]
+```
+
+**Alternative: Full sandbox bypass** (for Docker/hardened environments):
+
+```toml
+[models.codex]
+cli = "codex"
+headlessFlag = ""
+extraFlags = ["--dangerously-bypass-approvals-and-sandbox"]
+```
+
+See: https://developers.openai.com/codex/cli/reference/
 
 ## Development Notes
 

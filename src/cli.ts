@@ -14,6 +14,8 @@ import { statsCommand } from './commands/stats.js';
 import { verifyCommand } from './commands/verify.js';
 import { guideCommand } from './commands/guide.js';
 import { promptCommand } from './commands/prompt.js';
+import { workflowCommand } from './commands/workflow.js';
+import { runCommand } from './commands/run.js';
 
 const program = new Command();
 
@@ -36,5 +38,7 @@ program.addCommand(statsCommand);
 program.addCommand(verifyCommand);
 program.addCommand(guideCommand);
 program.addCommand(promptCommand);
+program.addCommand(workflowCommand);
+program.addCommand(runCommand);
 
 program.parse();

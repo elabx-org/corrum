@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { loadConfig } from '../config/index.js';
 import { analyzeTask } from '../core/analyzer.js';
 import { logger } from '../utils/logger.js';
+import { workflowEvents } from '../core/events.js';
 import type { AgentName, ConsensusMode } from '../types/index.js';
 
 export const analyzeCommand = new Command('analyze')
@@ -15,8 +16,15 @@ export const analyzeCommand = new Command('analyze')
   .option('--implementer <agent>', 'Override implementer (claude/codex/gemini, default: claude)')
   .option('--consensus-mode <mode>', 'Consensus mode: majority or unanimous')
   .option('--json', 'Output as JSON')
+  .option('--progress', 'Emit progress events to stderr (NDJSON format)')
   .action(async (options) => {
-    const { task, files, force, skip, planner, reviewer, implementer, consensusMode, json } = options;
+    const { task, files, force, skip, planner, reviewer, implementer, consensusMode, json, progress } = options;
+
+    // Enable progress events if requested
+    if (progress) {
+      workflowEvents.setEnabled(true);
+      workflowEvents.phaseStarted('analysis', { task });
+    }
 
     try {
       const config = loadConfig();
@@ -40,6 +48,30 @@ export const analyzeCommand = new Command('analyze')
         implementer: implementer as AgentName | undefined,
         consensusMode: consensusMode as ConsensusMode | undefined
       }, config);
+
+      // Emit progress events for analysis results
+      if (progress) {
+        // Emit expertise match events
+        if (result.expertiseMatches && result.expertiseMatches.length > 0) {
+          const topMatch = result.expertiseMatches[0];
+          const promptFocus = result.expertiseAssignments?.planner?.promptFocus ||
+                              result.expertiseAssignments?.reviewers[0]?.promptFocus || '';
+          workflowEvents.expertiseMatched(topMatch.expertise, topMatch.score, promptFocus);
+        }
+
+        // Emit analysis complete event
+        workflowEvents.analysisComplete(
+          result.requiresCorrum,
+          result.expertiseMatches?.[0]?.expertise || 'general',
+          result.matchedRules.keywords,
+          result.consensusMode
+        );
+
+        workflowEvents.phaseComplete('analysis', {
+          requiresCorrum: result.requiresCorrum,
+          expertise: result.expertiseMatches?.[0]?.expertise || 'general'
+        });
+      }
 
       if (json) {
         // Convert to snake_case for JSON output
